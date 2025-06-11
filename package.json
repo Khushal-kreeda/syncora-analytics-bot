@@ -1,0 +1,25 @@
+{
+  "name": "syncora-analytics-bot",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "author": "Kreedalabs",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ts-node-dev src/index.ts",
+    "start": "ts-node src/index.ts",
+    "simulate": "ts-node src/sample-bot.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.8.0",
+    "dotenv": "^16.5.0",
+    "puppeteer": "^24.10.0"
+  },
+  "devDependencies": {
+    "@types/puppeteer": "^7.0.4",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3",
+    "@types/bun": "latest"
+  },
+  "private": true
+}
