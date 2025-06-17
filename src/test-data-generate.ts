@@ -11,12 +11,12 @@ import * as path from "path";
 interface DataEvent {
   event: "data_generated";
   words: number;
-  file_size: number;
+  file_size: number; // in MB
   email: string;
   timestamp: string;
   user_id?: string;
-  generation_type?: string;
-  content_category?: string;
+  data_type: "jsonl";
+  projectId: string;
 }
 
 interface MonthlyStats {
@@ -100,7 +100,9 @@ function displayAnalysis(monthlyStats: { [month: string]: MonthlyStats }) {
   console.log(`   Total Events: ${totalEvents.toLocaleString()}`);
   console.log(`   Total Words: ${totalWords.toLocaleString()}`);
   console.log(`   Total Unique Users: ${allUsers.size}`);
-  console.log(`   Avg File Size: ${((totalWords * 10) / 1024).toFixed(2)} KB`);
+  console.log(
+    `   Avg File Size: ${((totalWords * 10) / 1024 / 1024).toFixed(4)} MB`
+  );
 }
 
 function run() {

@@ -9,12 +9,12 @@ import * as path from "path";
 interface DataEvent {
   event: "data_generated";
   words: number;
-  file_size: number;
+  file_size: number; // in MB
   email: string;
   timestamp: string;
   user_id?: string;
-  generation_type?: string;
-  content_category?: string;
+  data_type: "jsonl";
+  projectId: string;
 }
 
 interface User {
@@ -97,7 +97,9 @@ function calculateFileSize(wordCount: number): number {
   // Rough estimate: 1 word ≈ 6-8 bytes for plain text
   // For documents with formatting: 1 word ≈ 10-15 bytes
   const avgBytesPerWord = faker.number.int({ min: 8, max: 12 });
-  return wordCount * avgBytesPerWord;
+  const sizeInBytes = wordCount * avgBytesPerWord;
+  // Convert to MB
+  return sizeInBytes / (1024 * 1024);
 }
 
 function generateWordsCount(targetAvg: number): number {
@@ -195,22 +197,8 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
         email: user.email,
         timestamp: eventTime.toISOString(),
         user_id: user.id,
-        generation_type: faker.helpers.arrayElement([
-          "text_completion",
-          "content_generation",
-          "document_creation",
-          "email_draft",
-          "article_writing",
-          "code_generation",
-        ]),
-        content_category: faker.helpers.arrayElement([
-          "business",
-          "technical",
-          "creative",
-          "academic",
-          "marketing",
-          "personal",
-        ]),
+        data_type: "jsonl",
+        projectId: uuidv4(),
       };
 
       dataEvents.push(dataEvent);
@@ -296,7 +284,7 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
   console.log(`   Target match: ${targetMatchPercentage.toFixed(1)}%`);
   console.log(`   Events generated: ${eventsGenerated.toLocaleString()}`);
   console.log(
-    `   Avg file size per event: ${(avgFileSizePerEvent / 1024).toFixed(2)} KB`
+    `   Avg file size per event: ${avgFileSizePerEvent.toFixed(4)} MB`
   );
 
   // Add simple status indicator
@@ -313,7 +301,7 @@ function saveDataToFile(): void {
 
   try {
     fs.writeFileSync(outputPath, JSON.stringify(dataEvents, null, 2));
-    console.log("✅ Data successfully saved to data-events.json");
+    console.log("✅ Data successfully saved to data-generated.json");
   } catch (error) {
     console.error("❌ Error saving data to file:", error);
     throw error;
@@ -359,11 +347,7 @@ async function main(): Promise<void> {
     console.log(`   Target total words: ${totalTargetWords.toLocaleString()}`);
     console.log(`   Actual total words: ${totalActualWords.toLocaleString()}`);
     console.log(`   Overall target match: ${overallTargetMatch.toFixed(1)}%`);
-    console.log(
-      `   Total file size generated: ${(totalFileSize / 1024 / 1024).toFixed(
-        2
-      )} MB`
-    );
+    console.log(`   Total file size generated: ${totalFileSize.toFixed(2)} MB`);
 
     // Save to JSON file
     saveDataToFile();
@@ -375,7 +359,6 @@ async function main(): Promise<void> {
   }
 }
 
-// ── Runner ────────────────────────────────────────────────────
 function run() {
   main();
 }
