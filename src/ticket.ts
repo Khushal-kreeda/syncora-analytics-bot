@@ -128,7 +128,7 @@ events.sort(
 );
 
 // Write to file
-writeFileSync("events.json", JSON.stringify(events, null, 2));
+writeFileSync("tickets.json", JSON.stringify(events, null, 2));
 
 // Summary
 const totalRaised = events.filter((e) => e.event === "ticket-raised").length;

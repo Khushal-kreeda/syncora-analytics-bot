@@ -10,7 +10,9 @@
     "simulate": "ts-node src/sample-bot.ts",
     "test-user": "ts-node src/test-user.ts",
     "ticket": "ts-node src/ticket.ts",
-    "test-ticket": "ts-node src/test-ticket.ts"
+    "test-ticket": "ts-node src/test-ticket.ts",
+    "data-generate": "ts-node src/data-generate.ts",
+    "test-data": "ts-node src/test-data-generate.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^9.8.0",

@@ -241,11 +241,11 @@ function getPeakMonth(monthData: Record<string, number>): string {
 // ----------------------
 function run() {
   try {
-    const filePath = path.join(__dirname, "../events.json");
+    const filePath = path.join(__dirname, "../tickets.json");
 
     if (!fs.existsSync(filePath)) {
       console.error(
-        "❌ events.json file not found. Please run the ticket generation script first."
+        "❌ tickets.json file not found. Please run the ticket generation script first."
       );
       return;
     }
