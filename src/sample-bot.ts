@@ -320,7 +320,7 @@ const simulateUserVisit = async (user: User): Promise<void> => {
           });
 
           // Capture a custom event to ensure tracking
-          posthog.capture("simulation_visit", {
+          posthog.capture("user-active", {
             username: userData.username,
             device_type: userData.deviceType,
             region: userData.region,
