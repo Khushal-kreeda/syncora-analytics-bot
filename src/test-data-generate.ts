@@ -11,7 +11,7 @@ import * as path from "path";
 interface DataEvent {
   event: "data_generated";
   words: number;
-  file_size: number; // in MB
+  file_size: number;
   email: string;
   timestamp: string;
   user_id?: string;
