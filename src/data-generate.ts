@@ -17,6 +17,28 @@ interface DataEvent {
   projectId: string;
 }
 
+interface JobFailedEvent {
+  event: "job_failed";
+  error_code: string;
+  error_message: string;
+  email: string;
+  timestamp: string;
+  user_id?: string;
+  projectId: string;
+}
+
+interface DataDownloadEvent {
+  event: "data_downloaded";
+  file_size: number; // in MB
+  words: number;
+  email: string;
+  timestamp: string;
+  user_id?: string;
+  projectId: string;
+}
+
+type AllEvents = DataEvent | JobFailedEvent | DataDownloadEvent;
+
 interface User {
   id: string;
   email: string;
@@ -29,48 +51,53 @@ const MONTHS_PLAN = [
   {
     month: "2025-01",
     newSignups: 45,
-    dailyAvgMin: 1,
-    dailyAvgMax: 2,
+    dailyAvgMin: 0.3, // Reduced from 1-2 to 0.3-0.5 (fewer events)
+    dailyAvgMax: 0.5,
     targetFileSize: 4.5 * 1024 * 1024 * 1024, // 4.5 GB in bytes
     activityRate: 0.85, // 85% of users generate data (early adopters are more active)
+    targetDataGenerationMultiplier: 5.5, // 5.5x data generations relative to active users
   },
   {
     month: "2025-02",
     newSignups: 58,
-    dailyAvgMin: 2,
-    dailyAvgMax: 2,
+    dailyAvgMin: 0.4, // Reduced from 2-2 to 0.4-0.6
+    dailyAvgMax: 0.6,
     targetFileSize: 7.2 * 1024 * 1024 * 1024, // 7.2 GB in bytes
     activityRate: 0.82, // 82% activity rate
+    targetDataGenerationMultiplier: 5.8, // 5.8x data generations relative to active users
   },
   {
     month: "2025-03",
     newSignups: 74,
-    dailyAvgMin: 2,
-    dailyAvgMax: 3,
+    dailyAvgMin: 0.5, // Reduced from 2-3 to 0.5-0.7
+    dailyAvgMax: 0.7,
     targetFileSize: 13.3 * 1024 * 1024 * 1024, // 13.3 GB in bytes
     activityRate: 0.78, // 78% activity rate (more users, lower percentage active)
+    targetDataGenerationMultiplier: 6.0, // 6x data generations relative to active users
   },
   {
     month: "2025-04",
     newSignups: 94,
-    dailyAvgMin: 3,
-    dailyAvgMax: 3,
+    dailyAvgMin: 0.6, // Reduced from 3-3 to 0.6-0.8
+    dailyAvgMax: 0.8,
     targetFileSize: 18.6 * 1024 * 1024 * 1024, // 18.6 GB in bytes
     activityRate: 0.75, // 75% activity rate
+    targetDataGenerationMultiplier: 6.2, // 6.2x data generations relative to active users
   },
   {
     month: "2025-05",
     newSignups: 120,
-    dailyAvgMin: 4,
-    dailyAvgMax: 4,
+    dailyAvgMin: 0.7, // Reduced from 4-4 to 0.7-1.0
+    dailyAvgMax: 1.0,
     targetFileSize: 21.6 * 1024 * 1024 * 1024, // 21.6 GB in bytes
     activityRate: 0.72, // 72% activity rate (larger user base, more inactive users)
+    targetDataGenerationMultiplier: 6.5, // 6.5x data generations relative to active users
   },
 ];
 
 // ── User Management ───────────────────────────────────────────
 const allUsers: User[] = [];
-const dataEvents: DataEvent[] = [];
+const allEvents: AllEvents[] = [];
 
 // ── Utility Functions ─────────────────────────────────────────
 function getMonthRange(monthString: string): [Date, Date] {
@@ -113,13 +140,13 @@ function calculateWordsFromFileSize(fileSizeMB: number): number {
 }
 
 function generateFileSizeForEvent(targetAvgSizeMB: number): number {
-  // Generate file size around the target with realistic variation
-  // Increased multipliers to generate larger files on average and ensure we meet targets
-  const variation = faker.number.float({ min: 0.8, max: 4.0 }); // Increased range with higher minimum
+  // Generate larger file sizes with more variation to reduce total events
+  // Increased multipliers significantly to generate much larger files on average
+  const variation = faker.number.float({ min: 2.0, max: 8.0 }); // Increased from 0.8-4.0 to 2.0-8.0
   const fileSize = targetAvgSizeMB * variation;
 
-  // Ensure minimum realistic file size (0.2 MB minimum, increased from 0.1)
-  return Math.max(fileSize, 0.2);
+  // Ensure minimum realistic file size (1.0 MB minimum, increased from 0.2)
+  return Math.max(fileSize, 1.0);
 }
 
 // ── Generate Users for Each Month ─────────────────────────────
@@ -158,26 +185,21 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
   const targetFileSizeGB = monthData.targetFileSize / (1024 * 1024 * 1024);
   const targetFileSizeMB = monthData.targetFileSize / (1024 * 1024);
 
-  console.log(`\n📊 Generating data events for ${monthData.month}`);
-  console.log(
-    `   Target: ${targetFileSizeGB.toFixed(2)} GB | Users: ${
-      activeDataGenerators.length
-    }/${allActiveUsers.length} active`
+  // Calculate target number of data generations based on multiplier
+  const targetDataGenerations = Math.round(
+    activeDataGenerators.length * monthData.targetDataGenerationMultiplier
   );
 
   let eventsGenerated = 0;
   let totalFileSizeGenerated = 0;
 
-  // Estimate total events needed for the month
-  const avgEventsPerUser = (monthData.dailyAvgMin + monthData.dailyAvgMax) / 2;
-  const estimatedTotalEvents = Math.round(
-    activeDataGenerators.length * avgEventsPerUser * daysInMonth
-  );
+  // Calculate target average file size per event based on reduced event count
+  const targetAvgFileSizePerEventMB = targetFileSizeMB / targetDataGenerations;
 
-  // Calculate target average file size per event
-  const targetAvgFileSizePerEventMB = targetFileSizeMB / estimatedTotalEvents;
+  // Generate events distributed across the month to reach target count
+  const eventsPerDay = Math.ceil(targetDataGenerations / daysInMonth);
 
-  // Generate events for each day with file size-based approach
+  // Generate events for each day with enhanced file size-based approach
   for (let day = 1; day <= daysInMonth; day++) {
     const currentDate = new Date(
       Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), day)
@@ -190,22 +212,25 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
 
     if (eligibleUsers.length === 0) continue;
 
-    // Calculate events for today based on daily average range
-    const avgEventsPerUser = faker.number.float({
-      min: monthData.dailyAvgMin,
-      max: monthData.dailyAvgMax,
-    });
-    const eventsForToday = Math.round(eligibleUsers.length * avgEventsPerUser);
+    // Calculate events for today - distribute evenly across the month
+    const remainingDays = daysInMonth - day + 1;
+    const remainingEvents = targetDataGenerations - eventsGenerated;
+    const eventsForToday = Math.min(
+      Math.ceil(remainingEvents / remainingDays),
+      eligibleUsers.length * 2 // Cap at 2 events per user per day max
+    );
 
-    // Generate events for today with file size as primary constraint
+    // Generate events for today with larger file sizes
     for (let eventIndex = 0; eventIndex < eventsForToday; eventIndex++) {
+      if (eventsGenerated >= targetDataGenerations) break;
+
       const user = faker.helpers.arrayElement(eligibleUsers);
       const eventTime = randomDateInRange(
         currentDate,
         new Date(currentDate.getTime() + 24 * 60 * 60 * 1000 - 1)
       );
 
-      // Generate file size based on target with variation
+      // Generate larger file size based on target with increased variation
       const fileSize = generateFileSizeForEvent(targetAvgFileSizePerEventMB);
 
       // Calculate words based on file size
@@ -222,9 +247,72 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
         projectId: uuidv4(),
       };
 
-      dataEvents.push(dataEvent);
+      allEvents.push(dataEvent);
       eventsGenerated++;
       totalFileSizeGenerated += fileSize;
+
+      // Track successful data generation for download creation
+      let jobSuccessful = true;
+
+      // 3% chance to generate a job_failed event
+      if (Math.random() < 0.03) {
+        jobSuccessful = false; // Job failed, no download will be created
+
+        const errorMessages = [
+          "Insufficient storage space",
+          "Network timeout during processing",
+          "Invalid data format detected",
+          "Memory allocation failed",
+          "Processing quota exceeded",
+          "Authentication token expired",
+          "Database connection lost",
+          "File corruption detected",
+        ];
+
+        const errorCodes = [
+          "STORAGE_FULL",
+          "NETWORK_TIMEOUT",
+          "INVALID_FORMAT",
+          "MEMORY_ERROR",
+          "QUOTA_EXCEEDED",
+          "AUTH_EXPIRED",
+          "DB_CONNECTION_LOST",
+          "FILE_CORRUPTED",
+        ];
+
+        const errorIndex = Math.floor(Math.random() * errorMessages.length);
+        const jobFailedEvent: JobFailedEvent = {
+          event: "job_failed",
+          error_code: errorCodes[errorIndex],
+          error_message: errorMessages[errorIndex],
+          email: user.email,
+          timestamp: new Date(
+            eventTime.getTime() + Math.random() * 3600000
+          ).toISOString(), // Within 1 hour of data generation
+          user_id: user.id,
+          projectId: dataEvent.projectId,
+        };
+
+        allEvents.push(jobFailedEvent);
+      }
+
+      // Create exactly one download event for each successful data generation
+      // Only if the job was successful (no failure occurred)
+      if (jobSuccessful) {
+        const downloadEvent: DataDownloadEvent = {
+          event: "data_downloaded",
+          file_size: fileSize,
+          words: wordsGenerated, // Include words in download event
+          email: user.email,
+          timestamp: new Date(
+            eventTime.getTime() + Math.random() * 86400000
+          ).toISOString(), // Within 24 hours of data generation
+          user_id: user.id,
+          projectId: dataEvent.projectId,
+        };
+
+        allEvents.push(downloadEvent);
+      }
     }
   }
 
@@ -234,10 +322,14 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
   const targetIdeal =
     targetFileSizeMB * faker.number.float({ min: 1.1, max: 1.15 }); // 10-15% over target
 
-  let monthEvents = dataEvents.filter((event) => {
+  let monthEvents = allEvents.filter((event) => {
     const eventDate = new Date(event.timestamp);
-    return eventDate >= monthStart && eventDate <= monthEnd;
-  });
+    return (
+      eventDate >= monthStart &&
+      eventDate <= monthEnd &&
+      event.event === "data_generated"
+    );
+  }) as DataEvent[];
 
   if (totalFileSizeGenerated < targetMinimum) {
     // We're below target - MUST boost to at least 100% of target, preferably 10-15% over
@@ -285,35 +377,6 @@ function generateDataEventsForMonth(monthData: (typeof MONTHS_PLAN)[0]): void {
     (sum, event) => sum + event.file_size,
     0
   );
-
-  // Calculate statistics
-  const totalWordsGenerated = monthEvents.reduce(
-    (sum, event) => sum + event.words,
-    0
-  );
-  const targetMatchPercentage =
-    (totalFileSizeGenerated / targetFileSizeMB) * 100;
-  const finalFileSizeGB = totalFileSizeGenerated / 1024;
-  const wordsInMillions = totalWordsGenerated / 1000000;
-
-  console.log(
-    `   Generated: ${finalFileSizeGB.toFixed(2)} GB | ${wordsInMillions.toFixed(
-      1
-    )}M words | ${eventsGenerated.toLocaleString()} events | ${targetMatchPercentage.toFixed(
-      1
-    )}% match`
-  );
-
-  // Add simple status indicator - updated to require minimum 100% of target
-  if (targetMatchPercentage >= 100 && targetMatchPercentage <= 115) {
-    console.log(`   ✅ Target achieved (${targetMatchPercentage.toFixed(1)}%)`);
-  } else if (targetMatchPercentage > 115) {
-    console.log(`   ⚠️ Over target (${targetMatchPercentage.toFixed(1)}%)`);
-  } else {
-    console.log(
-      `   ❌ Under target (${targetMatchPercentage.toFixed(1)}%) - ERROR!`
-    );
-  }
 }
 
 // ── Save Data to JSON File ───────────────────────────────────
@@ -321,8 +384,7 @@ function saveDataToFile(): void {
   const outputPath = path.join(__dirname, "../data-generated.json");
 
   try {
-    fs.writeFileSync(outputPath, JSON.stringify(dataEvents, null, 2));
-    console.log("✅ Data successfully saved to data-generated.json");
+    fs.writeFileSync(outputPath, JSON.stringify(allEvents, null, 2));
   } catch (error) {
     console.error("❌ Error saving data to file:", error);
     throw error;
@@ -331,8 +393,7 @@ function saveDataToFile(): void {
 
 // ── Main Execution ───────────────────────────────────────────
 async function main(): Promise<void> {
-  console.log("🎯 Starting Data Generation Script");
-  console.log("==================================");
+  console.log("🎯 Generating Analytics Data...\n");
 
   try {
     // Generate users for each month
@@ -340,84 +401,96 @@ async function main(): Promise<void> {
       generateUsersForMonth(monthData);
     }
 
-    console.log(`\n👥 Total users created: ${allUsers.length}`);
-
     // Generate data events for each month
     for (const monthData of MONTHS_PLAN) {
       generateDataEventsForMonth(monthData);
     }
 
-    console.log(`\n📈 Total data events created: ${dataEvents.length}`);
+    // Calculate event type breakdown
+    const dataGeneratedEvents = allEvents.filter(
+      (e) => e.event === "data_generated"
+    ) as DataEvent[];
+    const jobFailedEvents = allEvents.filter((e) => e.event === "job_failed");
+    const dataDownloadEvents = allEvents.filter(
+      (e) => e.event === "data_downloaded"
+    );
 
-    // Calculate monthly breakdown
+    // Calculate totals
+    const totalWords = dataGeneratedEvents.reduce(
+      (sum, event) => sum + event.words,
+      0
+    );
+    const totalFileSize = dataGeneratedEvents.reduce(
+      (sum, event) => sum + event.file_size,
+      0
+    );
+    const totalFileSizeGB = totalFileSize / 1024;
+    const totalWordsInMillions = totalWords / 1000000;
+
+    // Display summary
+    console.log("📊 Generation Summary:");
+    console.log("=====================");
+    console.log(`👥 Total Users: ${allUsers.length}`);
+    console.log(`📁 Total Events: ${allEvents.length.toLocaleString()}`);
+    console.log(
+      `   📊 Data Generated: ${dataGeneratedEvents.length.toLocaleString()}`
+    );
+    console.log(
+      `   ❌ Jobs Failed: ${jobFailedEvents.length.toLocaleString()}`
+    );
+    console.log(
+      `   ⬇️ Data Downloads: ${dataDownloadEvents.length.toLocaleString()}`
+    );
+    console.log(
+      `📈 Total Data: ${totalFileSizeGB.toFixed(
+        2
+      )} GB (${totalWordsInMillions.toFixed(1)}M words)`
+    );
+
+    // Monthly breakdown
     console.log("\n📅 Monthly Breakdown:");
+    console.log("Month    | Data Gen | Downloads | Failures | Total GB");
+    console.log("---------|----------|-----------|----------|----------");
+
     for (const monthData of MONTHS_PLAN) {
       const [monthStart, monthEnd] = getMonthRange(monthData.month);
-      const monthEvents = dataEvents.filter((event) => {
+      const monthEvents = allEvents.filter((event) => {
         const eventDate = new Date(event.timestamp);
         return eventDate >= monthStart && eventDate <= monthEnd;
       });
 
-      const monthWords = monthEvents.reduce(
-        (sum, event) => sum + event.words,
-        0
+      const monthDataEvents = monthEvents.filter(
+        (e) => e.event === "data_generated"
+      ) as DataEvent[];
+      const monthJobFailures = monthEvents.filter(
+        (e) => e.event === "job_failed"
       );
-      const monthFileSize = monthEvents.reduce(
+      const monthDownloads = monthEvents.filter(
+        (e) => e.event === "data_downloaded"
+      );
+
+      const monthFileSize = monthDataEvents.reduce(
         (sum, event) => sum + event.file_size,
         0
       );
-      const monthWordsInMillions = monthWords / 1000000;
       const monthFileSizeGB = monthFileSize / 1024;
 
       console.log(
-        `   ${monthData.month}: ${monthFileSizeGB.toFixed(
-          2
-        )} GB | ${monthWordsInMillions.toFixed(1)}M words | ${
-          monthEvents.length
-        } events`
+        `${monthData.month} | ${monthDataEvents.length
+          .toString()
+          .padStart(8)} | ${monthDownloads.length
+          .toString()
+          .padStart(9)} | ${monthJobFailures.length
+          .toString()
+          .padStart(8)} | ${monthFileSizeGB.toFixed(2).padStart(8)}`
       );
     }
-
-    // Calculate overall statistics
-    const totalTargetFileSize = MONTHS_PLAN.reduce(
-      (sum, month) => sum + month.targetFileSize,
-      0
-    );
-    const totalActualWords = dataEvents.reduce(
-      (sum, event) => sum + event.words,
-      0
-    );
-    const totalFileSizeBytes = dataEvents.reduce(
-      (sum, event) => sum + event.file_size * 1024 * 1024, // Convert MB to bytes
-      0
-    );
-    const totalFileSizeGB = totalFileSizeBytes / (1024 * 1024 * 1024);
-    const totalTargetFileSizeGB = totalTargetFileSize / (1024 * 1024 * 1024);
-    const overallFileSizeMatch =
-      (totalFileSizeBytes / totalTargetFileSize) * 100;
-    const totalWordsInMillions = totalActualWords / 1000000;
-
-    console.log("\n🎯 Overall Summary:");
-    console.log(
-      `   File Size: ${totalFileSizeGB.toFixed(
-        2
-      )} GB / ${totalTargetFileSizeGB.toFixed(
-        2
-      )} GB (${overallFileSizeMatch.toFixed(1)}% match)`
-    );
-    console.log(`   Total Words: ${totalWordsInMillions.toFixed(1)}M words`);
-    console.log(
-      `   Average: ${(
-        totalFileSizeBytes /
-        (1024 * 1024) /
-        dataEvents.length
-      ).toFixed(2)} MB per event`
-    );
 
     // Save to JSON file
     saveDataToFile();
 
-    console.log("\n🎉 Data generation completed successfully!");
+    console.log("\n✅ Data generation completed successfully!");
+    console.log("� Data saved to data-generated.json");
   } catch (error) {
     console.error("❌ Error in data generation:", error);
     process.exit(1);
