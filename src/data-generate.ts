@@ -4,6 +4,7 @@ import { faker } from "@faker-js/faker";
 import { v4 as uuidv4 } from "uuid";
 import * as fs from "fs";
 import * as path from "path";
+import axios from "axios";
 
 // ── Types ─────────────────────────────────────────────────────
 interface DataEvent {
@@ -391,6 +392,75 @@ function saveDataToFile(): void {
   }
 }
 
+const dataset = allEvents;
+
+function chunkArray<T>(array: T[], chunkSize: number = 100): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+async function uploadInChunks() {
+  const CHUNK_SIZE = 100;
+
+  // Transform events to PostHog format
+  const transformedEvents = dataset.map((event) => ({
+    event: event.event,
+    distinct_id: event.user_id,
+    timestamp: event.timestamp,
+    properties: {
+      email: event.email,
+      userId: event.user_id,
+      projectId: event.projectId,
+      words: event.event === "data_generated" ? event.words : undefined,
+      file_size: event.event === "data_generated" ? event.file_size : undefined,
+      data_type: event.event === "data_generated" ? event.data_type : undefined,
+      $set: {
+        email: event.email,
+        userId: event.user_id,
+        projectId: event.projectId,
+        words: event.event === "data_generated" ? event.words : undefined,
+        file_size:
+          event.event === "data_generated" ? event.file_size : undefined,
+        data_type:
+          event.event === "data_generated" ? event.data_type : undefined,
+      },
+    },
+  }));
+
+  const chunks = chunkArray(transformedEvents, CHUNK_SIZE);
+
+  console.log(
+    `🚀 Starting upload of ${transformedEvents.length} events in ${chunks.length} chunks...`
+  );
+
+  for (let i = 0; i < chunks.length; i++) {
+    const payload = {
+      api_key: "phc_yspKR4pBYiKGGZURu5teTlhau3yUDEHEKiRgnEA2GWQ",
+      historical_migration: true,
+      batch: chunks[i],
+    };
+
+    try {
+      await axios.post("https://us.posthog.com/batch/", payload);
+      console.log(`✅ Uploaded batch ${i + 1}/${chunks.length}`);
+    } catch (error) {
+      console.error(
+        `❌ Error uploading batch ${i + 1}:`,
+        //@ts-ignore
+        error.response?.data || error.message
+      );
+      process.exit(1);
+    }
+  }
+
+  console.log(
+    `🎉 Successfully uploaded all ${transformedEvents.length} events to PostHog!`
+  );
+}
+
 // ── Main Execution ───────────────────────────────────────────
 async function main(): Promise<void> {
   console.log("🎯 Generating Analytics Data...\n");
@@ -504,6 +574,7 @@ function run() {
 // Run the script if called directly
 if (require.main === module) {
   run();
+  uploadInChunks();
 }
 
 export { main as generateDataEvents };

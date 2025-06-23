@@ -44,8 +44,6 @@ interface UserEvent {
   event: string;
   acquisition_source: string;
   country: string;
-  isPaying: boolean;
-  subscriptionType: string;
 }
 
 // ── Function to read user events from JSON file ──────────────
@@ -59,21 +57,10 @@ function readUserEvents(): UserEvent[] {
     const events = JSON.parse(fileContent) as UserEvent[];
     console.log(`📊 Total events found: ${events.length}`);
 
-    // Check if there's a limit specified via environment variable
-    const limit = process.env.EVENT_LIMIT
-      ? parseInt(process.env.EVENT_LIMIT)
-      : null;
-
-    if (limit && limit > 0) {
-      const limitedEvents = events.slice(0, limit);
-      console.log(
-        `📝 Processing first ${limitedEvents.length} events (limited by EVENT_LIMIT)`
-      );
-      return limitedEvents;
-    } else {
-      console.log(`📝 Processing all ${events.length} events`);
-      return events;
-    }
+    // For testing, let's process only the first 1000 events
+    const limitedEvents = events.slice(0, 1000);
+    console.log(`📝 Processing first ${limitedEvents.length} events`);
+    return limitedEvents;
   } catch (error) {
     console.error("❌ Error reading user-events.json:", error);
     process.exit(1);

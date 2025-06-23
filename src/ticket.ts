@@ -1,5 +1,6 @@
 import { writeFileSync } from "fs";
 import { faker } from "@faker-js/faker";
+import axios from "axios";
 
 interface TicketEvent {
   event: "ticket-raised" | "ticket-resolved";
@@ -153,3 +154,67 @@ events.slice(0, 6).forEach((event) => {
     )} | ${event.timestamp.slice(0, 10)}`
   );
 });
+
+// Upload logic
+const dataset = events;
+
+function chunkArray<T>(array: T[], chunkSize: number = 100): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+async function uploadInChunks() {
+  const CHUNK_SIZE = 100;
+
+  // Transform events to PostHog format
+  const transformedEvents = dataset.map((event) => ({
+    event: event.event,
+    distinct_id: event.email,
+    timestamp: event.timestamp,
+    properties: {
+      email: event.email,
+      username: event.username,
+      ticketId: event.ticketId,
+      $set: {
+        email: event.email,
+        username: event.username,
+      },
+    },
+  }));
+
+  const chunks = chunkArray(transformedEvents, CHUNK_SIZE);
+
+  console.log(
+    `🚀 Starting upload of ${transformedEvents.length} events in ${chunks.length} chunks...`
+  );
+
+  for (let i = 0; i < chunks.length; i++) {
+    const payload = {
+      api_key: "phc_yspKR4pBYiKGGZURu5teTlhau3yUDEHEKiRgnEA2GWQ",
+      historical_migration: true,
+      batch: chunks[i],
+    };
+
+    try {
+      await axios.post("https://us.posthog.com/batch/", payload);
+      console.log(`✅ Uploaded batch ${i + 1}/${chunks.length}`);
+    } catch (error) {
+      console.error(
+        `❌ Error uploading batch ${i + 1}:`,
+        //@ts-ignore
+        error.response?.data || error.message
+      );
+      process.exit(1);
+    }
+  }
+
+  console.log(
+    `🎉 Successfully uploaded all ${transformedEvents.length} events to PostHog!`
+  );
+}
+
+// Execute upload
+uploadInChunks().catch(console.error);

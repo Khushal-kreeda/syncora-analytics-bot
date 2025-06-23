@@ -8,11 +8,12 @@
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
     "simulate": "ts-node src/sample-bot.ts",
+    "user": "ts-node src/user.ts",
     "test-user": "ts-node src/test-user.ts",
-    "ticket": "ts-node src/ticket.ts",
-    "test-ticket": "ts-node src/test-ticket.ts",
     "data-generate": "ts-node src/data-generate.ts",
-    "test-data": "ts-node src/test-data-generate.ts"
+    "test-data": "ts-node src/test-data-generate.ts",
+    "ticket": "ts-node src/ticket.ts",
+    "test-ticket": "ts-node src/test-ticket.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^9.8.0",
